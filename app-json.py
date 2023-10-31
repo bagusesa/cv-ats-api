@@ -1,0 +1,43 @@
+from flask import Flask, request, jsonify
+import joblib
+import pandas as pd
+import json
+
+app = Flask(__name__)
+
+# Load the trained model
+clf = joblib.load('cv-model.pkl')
+
+# Load the tfidf vectorizer
+vectorizer = joblib.load('tfidf_vectorizer.pkl')
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = json.loads(request.data)
+
+    df = pd.DataFrame(data)
+    df = df.astype(str)
+
+    X = df.drop(columns=['role','nama'])
+    y = df[['role','nama']]
+
+    data = vectorizer.transform(X.apply(lambda x: ' '.join(x), axis=1))
+
+    prediction = clf.predict(data)
+    pred_score = clf.predict_proba(data)
+
+    df_score = pd.DataFrame(pred_score, columns = ['Data Scientist','Designer','Developer','Engineer','General','Marketing','Researcher'])
+    df_pred = pd.DataFrame(prediction, columns = ['Recommendation Role'])
+
+    label_map = {0: 'Data Scientist', 1: 'Designer', 2: 'Developer', 3: 'Engineer', 4: 'General', 5: 'Marketing', 6: 'Researcher'}
+    df_pred['Recommendation Role'] = df_pred['Recommendation Role'].map(label_map)
+
+    df_final = pd.concat([y, df_pred, df_score], axis=1)
+
+    results = df_final.to_dict(orient='records')
+
+    output = {'result': 'success', 'data': results}
+    return jsonify(output)
+
+if __name__ == '__main__':
+    app.run(port=5000, debug=False)
